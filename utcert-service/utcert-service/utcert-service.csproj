@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>utcert_service</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="11.0.1" />
+    <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="11.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UTCert.Data.Repository\UTCert.Data.Repository.csproj" />
+    <ProjectReference Include="..\UTCert.Service.BusinessLogic\UTCert.Service.BusinessLogic.csproj" />
+    <ProjectReference Include="..\UTCert.Service.Helper\UTCert.Service.Helper.csproj" />
+  </ItemGroup>
+
+</Project>

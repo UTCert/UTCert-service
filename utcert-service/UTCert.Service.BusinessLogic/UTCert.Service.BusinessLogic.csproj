@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>UTCert.Service.BusinessLogic</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\UTCert.Data.Repository\UTCert.Data.Repository.csproj" />
+      <ProjectReference Include="..\UTCert.Model.Web\UTCert.Model.Web.csproj" />
+      <ProjectReference Include="..\UTCert.Service.Helper\UTCert.Service.Helper.csproj" />
+    </ItemGroup>
+
+</Project>
