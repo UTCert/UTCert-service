@@ -7,5 +7,4 @@ public class DatabaseConfig
     public bool DetailedError { get; set; }
     
     public bool SensitiveDataLogging { get; set; }
-
 }

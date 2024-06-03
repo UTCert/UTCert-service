@@ -4,6 +4,8 @@ using UTCert.Data.Repository.Common.DbContext;
 using UTCert.Data.Repository.Interface;
 using UTCert.Service.BusinessLogic;
 using UTCert.Service.BusinessLogic.Interface;
+using UTCert.Service.Helper;
+using UTCert.Service.Helper.Interface;
 using UTCert.Service.Helper.JwtUtils;
 
 namespace utcert_service.Code;
@@ -29,5 +31,8 @@ public static class DependenciesInjectionRegister
         builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
         builder.Services.AddScoped<IJwtUtils, JwtUtils>();
         builder.Services.AddScoped<IUserService, UserService>();
+        builder.Services.AddScoped<ICertificateService, CertificateService>();
+        builder.Services.AddScoped<IPinataService, PinataService>();
+        builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
     }
 }

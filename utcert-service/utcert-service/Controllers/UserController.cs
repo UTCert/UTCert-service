@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Net;
+using Microsoft.AspNetCore.Mvc;
 using utcert_service.Authorization;
+using utcert_service.ResponseModel;
 using UTCert.Data.Repository.Interface;
 using UTCert.Model.Database;
 using UTCert.Model.Shared.Enum;
@@ -24,45 +26,47 @@ public class UserController : BaseController
     
     [AllowAnonymous]
     [HttpPost("register")]
-    public async Task<string> Register(RegisterDto model)
+    public async Task<ApiResponse<Guid>> Register(RegisterDto model)
     {
-        return await _userService.Register(model);
+        var newUserId = await _userService.Register(model);
+        return new ApiResponse<Guid>(newUserId);
     }
     
     [AllowAnonymous]
     [HttpPost("authenticate")]
-    public async Task<UserResponseDto> Authenticate(string stakeId)
+    public async Task<ApiResponse<UserResponseDto>> Authenticate(string stakeId)
     {
         var response = await _userService.Authenticate(stakeId, ipAddress());
         setTokenCookie(response.RefreshToken);
-        return response;
+        return new ApiResponse<UserResponseDto>(response);
     }
 
     [AllowAnonymous]
     [HttpPost("refresh-token")]
     public async Task<UserResponseDto> RefreshToken()
     {
-        var refreshToken = Request.Cookies["refreshToken"];
+        var refreshToken = Request.Cookies["refreshToken"] ?? "";
         var response = await _userService.RefreshToken(refreshToken, ipAddress());
         setTokenCookie(response.RefreshToken);
         return response;
     }
 
+    [AllowAnonymous]
     [HttpPost("revoke-token")]
-    public IActionResult RevokeToken(string token)
+    public async Task<BoolApiResponse> RevokeToken(string token)
     {
-        var refreshToken = string.IsNullOrEmpty(token) ? token : Request.Cookies["refreshToken"];
-        
-        if (string.IsNullOrEmpty(refreshToken))
-            return BadRequest(new { message = "Token is required" });
+        var curToken = string.IsNullOrWhiteSpace(token) ? Request.Cookies["refreshToken"] : token;
 
-        if (!User.OwnsToken(refreshToken))
-            return Unauthorized(new { message = "Unauthorized" });
+        if (string.IsNullOrEmpty(curToken))
+        {
+            return new BoolApiResponse(false, "Token is required", HttpStatusCode.BadRequest);
+        }
 
-        _userService.RevokeToken(refreshToken, ipAddress());
-        return Ok(new { message = "Token revoked" });
+        var result = await _userService.RevokeToken(curToken, ipAddress());
+        return new BoolApiResponse(result);
     }
     
+    //comment [Authorize] at class level if want to set permission admin only
     [Authorize(Role.Admin)]  
     [HttpGet]
     public async Task<RefreshToken?> GetAll()

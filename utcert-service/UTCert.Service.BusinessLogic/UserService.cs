@@ -20,12 +20,12 @@ public class UserService : EntityService<User>, IUserService
     private readonly IJwtUtils _jwtUtils;
     private readonly IMapper _mapper;
     private readonly AppSettings _appSettings;
-    
+
     public UserService(IJwtUtils jwtUtils,
-                        IMapper mapper,
-                        IOptions<AppSettings> appSettings, 
-                        IUnitOfWork unitOfWork) 
-                        : base(unitOfWork, unitOfWork.UserRepository)
+        IMapper mapper,
+        IOptions<AppSettings> appSettings,
+        IUnitOfWork unitOfWork)
+        : base(unitOfWork, unitOfWork.UserRepository)
     {
         _jwtUtils = jwtUtils;
         _mapper = mapper;
@@ -33,93 +33,137 @@ public class UserService : EntityService<User>, IUserService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<string> Register(RegisterDto model)
+    public async Task<Guid> Register(RegisterDto model)
     {
-        var user = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.StakeId == model.StakeId);
-        if (user != null)
+        try
         {
-            throw new AppException("User has been existed!");
+            var user = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.StakeId == model.StakeId);
+
+            if (user != null)
+            {
+                throw new AppException("User has been existed!");
+            }
+
+            // map model to new account object
+            var newUser = _mapper.Map<User>(model);
+            newUser.Id = Guid.NewGuid();
+            newUser.Role = Role.User;
+            newUser.CreatedDate = DateTime.UtcNow;
+            newUser.IsDeleted = false;
+            newUser.IsVerified = false;
+
+            await CreateAsync(newUser);
+            return newUser.Id;
         }
-
-        var newUser = _mapper.Map<User>(model);
-        var token = await generateVerificationToken();
-
-        newUser.Id =  Guid.NewGuid();
-        newUser.Role = Role.User;
-        newUser.CreatedDate = DateTime.UtcNow;
-        newUser.IsDeleted = false;
-        newUser.IsVerified = false;
-        newUser.VerificationToken = token;
-        
-        await CreateAsync(newUser);
-        return token;
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
+
 
     public async Task<UserResponseDto> Authenticate(string stakeId, string ipAddress)
     {
-        var user = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.StakeId == stakeId);
+        try
+        {
+            var user = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.StakeId == stakeId);
 
-        if (user == null)
-            throw new AppException("User not found!");
+            if (user == null)
+                throw new AppException("User not found!");
 
-        // authentication successful so generate jwt and refresh tokens
-        var jwtToken = _jwtUtils.GenerateJwtToken(user);
-        var refreshToken =  _jwtUtils.GenerateRefreshToken(ipAddress);
-        refreshToken.Id = Guid.NewGuid();
-        refreshToken.UserId = user.Id;
-        
-        await removeOldRefreshTokens(user.Id);
-        await _unitOfWork.RefreshTokenRepository.AddAsync(refreshToken);
-        await _unitOfWork.CommitAsync();
+            var jwtToken = _jwtUtils.GenerateJwtToken(user);
+            var refreshToken = _jwtUtils.GenerateRefreshToken(ipAddress);
+            refreshToken.Id = Guid.NewGuid();
+            refreshToken.UserId = user.Id;
 
-        var response = _mapper.Map<UserResponseDto>(user);
-        response.JwtToken = jwtToken;
-        response.RefreshToken = refreshToken.Token;
-        return response;
+            // remove old refresh tokens
+            await RemoveOldRefreshTokens(user.Id);
+
+            await _unitOfWork.RefreshTokenRepository.AddAsync(refreshToken);
+            await _unitOfWork.CommitAsync();
+
+            var response = _mapper.Map<UserResponseDto>(user);
+            response.JwtToken = jwtToken;
+            response.RefreshToken = refreshToken.Token;
+            return response;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     public async Task<UserResponseDto> RefreshToken(string token, string ipAddress)
     {
-        var refreshToken = await _unitOfWork.RefreshTokenRepository.GetToken(token);
-        if (refreshToken != null || !refreshToken.IsActive)
-            throw new AppException("Invalid token");
-        
-        var user = await _unitOfWork.UserRepository.GetByIdAsync(refreshToken.UserId);
-        if (user == null)
-            throw new AppException("User not found");
-        
-        if (refreshToken.IsRevoked)
+        try
         {
-            await revokeDescendantRefreshTokens(refreshToken, user, ipAddress, $"Attempted reuse of revoked ancestor token: {token}");
+            var refreshToken = await _unitOfWork.RefreshTokenRepository.GetToken(token);
+
+            if (refreshToken == null || !refreshToken.IsActive)
+            {
+                throw new AppException("Invalid token");
+            }
+
+            var user = await _unitOfWork.UserRepository.GetByIdAsync(refreshToken.UserId);
+            if (user == null)
+            {
+                throw new AppException("User not found");
+            }
+
+            await RemoveOldRefreshTokens(user.Id);
+            var newRefreshToken = _jwtUtils.GenerateRefreshToken(ipAddress);
+
+            refreshToken.Revoked = DateTime.UtcNow;
+            refreshToken.RevokedByIp = ipAddress;
+            refreshToken.ReasonRevoked = "Replaced by new token";
+            refreshToken.ReplacedByToken = newRefreshToken.Token;
+
+            _unitOfWork.RefreshTokenRepository.UpdateAsync(refreshToken);
+
+            newRefreshToken.Id = Guid.NewGuid();
+            newRefreshToken.UserId = user.Id;
+
+            await _unitOfWork.RefreshTokenRepository.AddAsync(newRefreshToken);
+            await _unitOfWork.CommitAsync();
+
+            var response = _mapper.Map<UserResponseDto>(user);
+            response.JwtToken = _jwtUtils.GenerateJwtToken(user);
+            response.RefreshToken = newRefreshToken.Token;
+
+            return response;
         }
-
-        var newRefreshToken = rotateRefreshToken(refreshToken, ipAddress);
-        await removeOldRefreshTokens(user.Id);
-        
-        await _unitOfWork.RefreshTokenRepository.AddAsync(refreshToken);
-        await _unitOfWork.CommitAsync();
-        
-        var jwtToken = _jwtUtils.GenerateJwtToken(user);
-
-        var response = _mapper.Map<UserResponseDto>(user);
-        response.JwtToken = jwtToken;
-        response.RefreshToken = newRefreshToken.Token;
-        return response;
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
-    public async Task RevokeToken(string token, string ipAddress)
+    public async Task<bool> RevokeToken(string token, string ipAddress)
     {
-        var refreshToken = await _unitOfWork.RefreshTokenRepository.GetToken(token);
-        if (refreshToken != null || !refreshToken.IsActive)
-            throw new AppException("Invalid token");
-        
-        if (!refreshToken.IsActive)
-            throw new AppException("Invalid token");
-        
-        revokeRefreshToken(refreshToken, ipAddress, "Revoked without replacement");
+        try
+        {
+            var refreshToken = await _unitOfWork.RefreshTokenRepository.GetToken(token);
 
-        _unitOfWork.RefreshTokenRepository.UpdateAsync(refreshToken);
-        await _unitOfWork.CommitAsync();
+            if (refreshToken == null || !refreshToken.IsActive)
+            {
+                throw new AppException("Invalid token");
+            }
+
+            refreshToken.Revoked = DateTime.UtcNow;
+            refreshToken.RevokedByIp = ipAddress;
+            refreshToken.ReasonRevoked = "Revoked without replacement";
+
+            _unitOfWork.RefreshTokenRepository.UpdateAsync(refreshToken);
+            return await _unitOfWork.CommitAsync() > 0;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+            throw;
+        }
     }
 
     public IEnumerable<UserResponseDto> GetAll()
@@ -129,64 +173,20 @@ public class UserService : EntityService<User>, IUserService
     }
 
     #region private Functions
-
-    private async Task<string> generateVerificationToken()
-    {
-        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
-
-        // TODO: it will be slow when the number of users becomes large
-        var tokenIsUnique = await _unitOfWork.UserRepository.AnyAsync(x => x.VerificationToken == token);
-        if (tokenIsUnique)
-        {
-            return await generateVerificationToken();
-        }
-        return token;
-    }
     
-    private async Task removeOldRefreshTokens(Guid userId)
+    private async Task RemoveOldRefreshTokens(Guid userId)
     {
         var refreshTokens = await _unitOfWork.RefreshTokenRepository.GetRefreshTokens(userId);
         var oldRefreshTokens = refreshTokens.Where(x =>
             !x.IsActive &&
             x.Created.AddDays(_appSettings.RefreshTokenTTL) <= DateTime.UtcNow).ToList();
 
-        _unitOfWork.RefreshTokenRepository.DeleteRange(oldRefreshTokens);
-        await _unitOfWork.CommitAsync();
-    }
-    
-    private async Task revokeDescendantRefreshTokens(RefreshToken refreshToken, User user, string ipAddress, string reason)
-    {
-        if (string.IsNullOrEmpty(refreshToken.ReplacedByToken))
+        if (oldRefreshTokens.Any())
         {
-            return;
-        }
-        
-        var childToken = await _unitOfWork.RefreshTokenRepository
-            .FirstOrDefaultAsync(x => x.Token == refreshToken.ReplacedByToken);
-        if (childToken.IsActive)
-        {
-            revokeRefreshToken(childToken, ipAddress, reason);
-        }
-        else
-        {
-            await revokeDescendantRefreshTokens(childToken, user, ipAddress, reason);
+            _unitOfWork.RefreshTokenRepository.DeleteRange(oldRefreshTokens);
+            await _unitOfWork.CommitAsync();
         }
     }
     
-    private void revokeRefreshToken(RefreshToken token, string ipAddress, string reason = null, string replacedByToken = null)
-    {
-        token.Revoked = DateTime.UtcNow;
-        token.RevokedByIp = ipAddress;
-        token.ReasonRevoked = reason;
-        token.ReplacedByToken = replacedByToken;
-    }
-    
-    private RefreshToken rotateRefreshToken(RefreshToken refreshToken, string ipAddress)
-    {
-        var newRefreshToken = _jwtUtils.GenerateRefreshToken(ipAddress);
-        revokeRefreshToken(refreshToken, ipAddress, "Replaced by new token", newRefreshToken.Token);
-        return newRefreshToken;
-    }
-
     #endregion
 }

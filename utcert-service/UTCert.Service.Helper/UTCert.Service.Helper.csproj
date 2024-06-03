@@ -13,6 +13,8 @@
 
     <ItemGroup>
       <PackageReference Include="AutoMapper" Version="11.0.1" />
+      <PackageReference Include="CloudinaryDotNet" Version="1.26.2" />
+      <PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="6.0.0-preview.4.21253.5" />
     </ItemGroup>
 
     <ItemGroup>
@@ -24,6 +26,9 @@
       </Reference>
       <Reference Include="Microsoft.AspNetCore.Mvc.Core">
         <HintPath>C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\6.0.21\Microsoft.AspNetCore.Mvc.Core.dll</HintPath>
+      </Reference>
+      <Reference Include="Microsoft.AspNetCore.StaticFiles">
+        <HintPath>C:\Program Files\dotnet\shared\Microsoft.AspNetCore.App\6.0.21\Microsoft.AspNetCore.StaticFiles.dll</HintPath>
       </Reference>
     </ItemGroup>
 
