@@ -8,13 +8,14 @@ public class UnitOfWork : UnitOfWorkBase, IUnitOfWork
 {
     private UserRepository _userRepository;
     private RefreshTokenRepository _refreshTokenRepository;
+    private CertificateRepository _certificateRepository;
     
     public UnitOfWork(IDbContext context) : base(context)
     {
     }
 
     public IUserRepository UserRepository => _userRepository ??= new UserRepository(DbContext);
-    
     public IRefreshTokenRepository RefreshTokenRepository => _refreshTokenRepository ??= new RefreshTokenRepository(DbContext);
+    public ICertificateRepository CertificateRepository => _certificateRepository ??= new CertificateRepository(DbContext);
 
 }

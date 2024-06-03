@@ -7,4 +7,6 @@ public interface IUnitOfWork: IUnitOfWorkBase
     IUserRepository UserRepository { get; }
     
     IRefreshTokenRepository RefreshTokenRepository { get; }
+    
+    ICertificateRepository CertificateRepository { get; }
 }

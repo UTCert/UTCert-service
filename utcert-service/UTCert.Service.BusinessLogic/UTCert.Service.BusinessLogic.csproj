@@ -13,4 +13,8 @@
       <ProjectReference Include="..\UTCert.Service.Helper\UTCert.Service.Helper.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="EPPlus" Version="7.1.3" />
+    </ItemGroup>
+
 </Project>

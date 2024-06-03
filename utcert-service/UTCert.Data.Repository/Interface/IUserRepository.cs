@@ -5,5 +5,7 @@ namespace UTCert.Data.Repository.Interface;
 
 public interface IUserRepository : IGenericRepository<User>
 {
-    
+    Task<User> GetUserByStakeId(string stakeId);
+
+    Task<User> GetUserById(Guid id);
 }

@@ -1,14 +1,26 @@
 using System.Text.Json.Serialization;
 using Microsoft.OpenApi.Models;
+using OfficeOpenXml;
 using utcert_service.Authorization;
 using utcert_service.Code;
 using UTCert.Model.Shared.Authorization;
+using UTCert.Model.Shared.Common;
+using UTCert.Service.Helper;
 using UTCert.Service.Helper.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
+ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
 // Add services to the container.
-builder.Services.AddCors();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("CorsApi",
+        config => config.WithOrigins("http://localhost:3000", "http://mywebsite.com")
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
 builder.Services.AddControllers().AddJsonOptions(x => 
 {
     // serialize enums as strings in api responses (e.g. Role)
@@ -16,6 +28,7 @@ builder.Services.AddControllers().AddJsonOptions(x =>
 });;
 
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
+builder.Services.Configure<PinataConfig>(builder.Configuration.GetSection("PinataConfig"));
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

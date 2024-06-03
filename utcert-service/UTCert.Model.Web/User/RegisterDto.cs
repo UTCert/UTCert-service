@@ -1,14 +1,15 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 
 namespace UTCert.Model.Web.User;
 
 public class RegisterDto
 {
     [Required]
-    public string StakeId { get; set; }
+    public string StakeId { get; set; } = null!;
 
     [Required]
-    public string Name { get; set; }
+    public string Name { get; set; } = null!;
 
-    public string? AvatarUri { get; set; }
+    public IFormFile? AvatarUri { get; set; }
 }
