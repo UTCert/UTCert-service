@@ -9,6 +9,9 @@ public class RegisterDto
     public string StakeId { get; set; } = null!;
 
     [Required]
+    public string ReceiveAddress { get; set; } = null!; 
+
+    [Required]
     public string Name { get; set; } = null!;
 
     public IFormFile? AvatarUri { get; set; }

@@ -2,7 +2,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using UTCert.Model.Database;
-using UTCert.Models.Database;
 
 namespace UTCert.Data.Repository.Common.DbContext;
 

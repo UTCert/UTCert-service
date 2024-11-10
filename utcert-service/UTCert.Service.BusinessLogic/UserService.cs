@@ -9,6 +9,7 @@ using UTCert.Model.Shared.Enum;
 using UTCert.Model.Web.User;
 using UTCert.Service.BusinessLogic.Common;
 using UTCert.Service.BusinessLogic.Interface;
+using UTCert.Service.Helper.Interface;
 using UTCert.Service.Helper.JwtUtils;
 
 
@@ -20,21 +21,25 @@ public class UserService : EntityService<User>, IUserService
     private readonly IJwtUtils _jwtUtils;
     private readonly IMapper _mapper;
     private readonly AppSettings _appSettings;
+    private readonly ICloudinaryService _cloudinaryService;
 
     public UserService(IJwtUtils jwtUtils,
         IMapper mapper,
         IOptions<AppSettings> appSettings,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork, 
+        ICloudinaryService cloudinaryService)
         : base(unitOfWork, unitOfWork.UserRepository)
     {
         _jwtUtils = jwtUtils;
         _mapper = mapper;
         _appSettings = appSettings.Value;
         _unitOfWork = unitOfWork;
+        _cloudinaryService = cloudinaryService;
     }
 
     public async Task<Guid> Register(RegisterDto model)
     {
+        var imageUrl = "";
         try
         {
             var user = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.StakeId == model.StakeId);
@@ -44,7 +49,6 @@ public class UserService : EntityService<User>, IUserService
                 throw new AppException("User has been existed!");
             }
 
-            // map model to new account object
             var newUser = _mapper.Map<User>(model);
             newUser.Id = Guid.NewGuid();
             newUser.Role = Role.User;
@@ -52,16 +56,26 @@ public class UserService : EntityService<User>, IUserService
             newUser.IsDeleted = false;
             newUser.IsVerified = false;
 
+            if (model.AvatarUri != null && model.AvatarUri.Length > 0)
+            {
+                var res = await _cloudinaryService.UploadFromFile(model.AvatarUri, Constants.AvatarFolderName);
+                newUser.AvatarUri = res;
+                imageUrl = res; 
+            }
+
             await CreateAsync(newUser);
             return newUser.Id;
         }
         catch (Exception e)
         {
             Console.WriteLine(e);
+            if(!string.IsNullOrEmpty(imageUrl))
+            {
+                await _cloudinaryService.Delete(imageUrl);
+            }
             throw;
         }
     }
-
 
     public async Task<UserResponseDto> Authenticate(string stakeId, string ipAddress)
     {
@@ -172,8 +186,21 @@ public class UserService : EntityService<User>, IUserService
         return  _mapper.Map<IList<UserResponseDto>>(users);
     }
 
+    public async Task<bool> HasAccount(string stakeId)
+    {
+        return await _unitOfWork.UserRepository.AnyAsync(x => x.StakeId == stakeId);
+    }
+
+    public async Task<UserResponseDto> GetById(Guid id)
+    {
+        var user = await _unitOfWork.UserRepository.GetByIdAsync(id)
+            ?? throw new Exception("User does not exist or has been deleted");
+
+        return _mapper.Map<UserResponseDto>(user);
+    }
+
     #region private Functions
-    
+
     private async Task RemoveOldRefreshTokens(Guid userId)
     {
         var refreshTokens = await _unitOfWork.RefreshTokenRepository.GetRefreshTokens(userId);
