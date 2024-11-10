@@ -7,6 +7,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\UTCert.Model.Database\UTCert.Model.Database.csproj" />
       <ProjectReference Include="..\UTCert.Model.Shared\UTCert.Model.Shared.csproj" />
     </ItemGroup>
 

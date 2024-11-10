@@ -9,4 +9,6 @@ public interface IUserService
     Task<UserResponseDto> RefreshToken(string token, string ipAddress);
     Task<bool> RevokeToken(string token, string ipAddress);
     IEnumerable<UserResponseDto> GetAll();
+    Task<bool> HasAccount(string stakeId);
+    Task<UserResponseDto> GetById(Guid id);
 }
