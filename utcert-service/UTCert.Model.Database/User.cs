@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using UTCert.Model.Shared.Enum;
 
 namespace UTCert.Model.Database;
@@ -10,7 +11,10 @@ public class User
     public Guid Id { get; set; }
     public string StakeId { get; set; }
     public string Name { get; set; }
+    public string ReceiveAddress { get; set; }
     public string? AvatarUri { get; set; }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
     public Role Role { get; set; }
     public bool IsVerified { get; set; }
     public bool IsDeleted { get; set; }

@@ -17,23 +17,23 @@ public class UserController : BaseController
 {
     private readonly IUserService _userService;
     private readonly IUnitOfWork _unitOfWork;
-    
+
     public UserController(IUserService userService, IUnitOfWork unitOfWork)
     {
         _userService = userService;
         _unitOfWork = unitOfWork;
     }
-    
+
     [AllowAnonymous]
     [HttpPost("register")]
-    public async Task<ApiResponse<Guid>> Register(RegisterDto model)
+    public async Task<ApiResponse<Guid>> Register([FromForm] RegisterDto model)
     {
         var newUserId = await _userService.Register(model);
         return new ApiResponse<Guid>(newUserId);
     }
-    
+
     [AllowAnonymous]
-    [HttpPost("authenticate")]
+    [HttpGet("authenticate")]
     public async Task<ApiResponse<UserResponseDto>> Authenticate(string stakeId)
     {
         var response = await _userService.Authenticate(stakeId, ipAddress());
@@ -65,14 +65,66 @@ public class UserController : BaseController
         var result = await _userService.RevokeToken(curToken, ipAddress());
         return new BoolApiResponse(result);
     }
-    
+
     //comment [Authorize] at class level if want to set permission admin only
-    [Authorize(Role.Admin)]  
-    [HttpGet]
-    public async Task<RefreshToken?> GetAll()
+    /* [Authorize(Role.Admin)]  
+     [HttpGet]
+     public async Task<RefreshToken?> GetAll()
+     {
+         var g = new Guid("E7653248-FDFF-4939-B472-A424D4ABF74A");
+         return await _unitOfWork.RefreshTokenRepository.GetByIdAsync(g);
+     }*/
+
+    [AllowAnonymous]
+    [HttpGet("has-account")]
+    public async Task<ApiResponse<bool>> HasAccount(string stakeId)
     {
-        var g = new Guid("E7653248-FDFF-4939-B472-A424D4ABF74A");
-        return await _unitOfWork.RefreshTokenRepository.GetByIdAsync(g);
+        var result = await _userService.HasAccount(stakeId);
+        return new ApiResponse<bool>()
+        {
+            Success = result
+        };
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    [Route("{id:guid}")]
+    public async Task<ApiResponse<UserResponseDto>> GetById(Guid id)
+    {
+        var response = new ApiResponse<UserResponseDto>();
+        try
+        {
+            var result = await _userService.GetById(id);
+            response.Success = true;
+            response.Data = result;
+            return response;
+
+        }
+        catch (Exception ex)
+        {
+            response.Success = false;
+            response.Message = ex.Message;
+            return response;
+        }
+
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ApiResponse<bool>> Update(Guid id, [FromForm] UserCrudDto input) 
+    {
+        try
+        {
+            var result = await _userService.Update(id, input);
+            return new ApiResponse<bool>() { Success = result };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
     }
 
     #region private Functions

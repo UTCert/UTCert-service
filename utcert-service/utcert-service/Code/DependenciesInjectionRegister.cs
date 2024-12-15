@@ -32,6 +32,7 @@ public static class DependenciesInjectionRegister
         builder.Services.AddScoped<IJwtUtils, JwtUtils>();
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<ICertificateService, CertificateService>();
+        builder.Services.AddScoped<IContactService, ContactService>();
         builder.Services.AddScoped<IPinataService, PinataService>();
         builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
     }
