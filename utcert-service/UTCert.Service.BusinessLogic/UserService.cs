@@ -26,7 +26,7 @@ public class UserService : EntityService<User>, IUserService
     public UserService(IJwtUtils jwtUtils,
         IMapper mapper,
         IOptions<AppSettings> appSettings,
-        IUnitOfWork unitOfWork, 
+        IUnitOfWork unitOfWork,
         ICloudinaryService cloudinaryService)
         : base(unitOfWork, unitOfWork.UserRepository)
     {
@@ -60,7 +60,7 @@ public class UserService : EntityService<User>, IUserService
             {
                 var res = await _cloudinaryService.UploadFromFile(model.AvatarUri, Constants.AvatarFolderName);
                 newUser.AvatarUri = res;
-                imageUrl = res; 
+                imageUrl = res;
             }
 
             await CreateAsync(newUser);
@@ -199,6 +199,28 @@ public class UserService : EntityService<User>, IUserService
         return _mapper.Map<UserResponseDto>(user);
     }
 
+    public async Task<bool> Update(Guid id, UserCrudDto input)
+    {
+        var _userRepos = _unitOfWork.UserRepository;
+        var user = await _userRepos.FirstOrDefaultAsync(x => x.Id == id) ?? throw new AppException("User does not exist or has been deleted!");
+
+        if (input.AvatarUri != null && input.AvatarUri.Length > 0)
+        {
+            if (!string.IsNullOrEmpty(user.AvatarUri))
+            {
+                await _cloudinaryService.Delete(user.AvatarUri);
+            }
+            var res = await _cloudinaryService.UploadFromFile(input.AvatarUri, Constants.AvatarFolderName);
+            user.AvatarUri = res;
+        }
+
+        user.Name = input.Name;
+        user.ModifiedDate = DateTime.Now;
+        _userRepos.UpdateAsync(user);
+
+        return await _unitOfWork.CommitAsync() > 0;
+    }
+
     #region private Functions
 
     private async Task RemoveOldRefreshTokens(Guid userId)
@@ -214,6 +236,6 @@ public class UserService : EntityService<User>, IUserService
             await _unitOfWork.CommitAsync();
         }
     }
-    
+
     #endregion
 }

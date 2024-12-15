@@ -1,11 +1,8 @@
 ﻿using System.Drawing;
 using System.Globalization;
-using System.Net.Mail;
-using System.Runtime.ConstrainedExecution;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using CloudinaryDotNet.Actions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using OfficeOpenXml;
@@ -74,6 +71,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                         SignHash = cert.SignHash,
                         AttachmentJson = cert.AttachmentJson, 
                         ReceivedDate = cert.ReceivedDate, 
+                        Note = cert.Note,
                     };
 
 
@@ -108,7 +106,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         var _certRepos = _unitOfWork.CertificateRepository.GetAll().AsNoTracking();
         var query = from cert in _certRepos
                     .Where(x => x.ReceiverId == input.ReceiverId
-                     && !x.IsDeleted && x.Status == (int)CertificateStatus.Sent)
+                     && !x.IsDeleted && (x.Status == (int)CertificateStatus.Sent || x.Status == (int)CertificateStatus.Banned))
                     join contact in _unitOfWork.ContactRepository.GetAll().AsNoTracking()
                     on new { cert.IssuerId, cert.ReceiverId } equals new { contact.IssuerId, contact.ReceiverId } into ContactDefaults
                     from cd in ContactDefaults.DefaultIfEmpty()
@@ -137,7 +135,8 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                         ContactId = cd != null ? cd.Id : null,
                         ContactStatus = cd != null ? (int?)cd.Status : null,
                         ReceivedDate = cert.ReceivedDate,
-                        AttachmentJson = cert.AttachmentJson, 
+                        AttachmentJson = cert.AttachmentJson,
+                        Note = cert.Note,
                     };
 
         query = query
@@ -167,31 +166,25 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
 
     public async Task<bool> DeleteCertificate(Guid certId)
     {
-        var errorMessage = "Something wrong!!";
         try
         {
             var cert = await _unitOfWork.CertificateRepository.FirstOrDefaultAsync(x => x.Id == certId);
             if(cert == null)
             {
-                errorMessage = "Certificate isn't exist!!";
-                throw new Exception();
+                throw new AppException("Certificate isn't exist!!");
             }
 
             if (cert.Status == (int)CertificateStatus.Sent)
             {
-                errorMessage = "The certificate that has been sent cannot be deleted";
-                throw new Exception();
+                throw new AppException("The certificate that has been sent cannot be deleted");
             }
 
             _unitOfWork.CertificateRepository.Delete(cert);
             return await _unitOfWork.CommitAsync() > 0;
         } catch(Exception ex)
         {
-            Console.WriteLine(ex.Message);
-            throw new Exception(errorMessage);
+            throw new AppException(ex.Message);
         }
-
-
     }
 
     public async Task<bool> SignCertificate(SignCertificateRequest input)
@@ -199,7 +192,6 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         var certificate = await _unitOfWork.CertificateRepository.GetByIdAsync(input.CertificateId) ?? throw new AppException("Certificate not found");
         var issuer = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.Id == certificate.IssuerId);
         var receiver = await _unitOfWork.UserRepository.FirstOrDefaultAsync(x => x.Id == certificate.ReceiverId); 
-        certificate.Status = (byte)CertificateStatus.Signed;
         certificate.SignedDate = DateTime.UtcNow;
         certificate.ModifiedDate = DateTime.UtcNow;
         certificate.SigningType = input.SigningType;
@@ -230,6 +222,17 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
+
+            if(lstSignerState.All(x => x.IsSigned))
+            {
+                certificate.Status = (int)CertificateStatus.Signed; 
+            } else
+            {
+                certificate.Status = (int)CertificateStatus.Pending; 
+            }
+        } else
+        {
+            certificate.Status = (int)CertificateStatus.Signed; 
         }
 
         if (input.IssuerAddress == issuer.ReceiveAddress)
@@ -362,9 +365,9 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         return await _unitOfWork.CommitAsync() > 0;
     }
 
-    public async Task<bool> BanCertificate(Guid certificateId)
+    public async Task<bool> BanCertificate(CertificateUploadDto input)
     {
-        var certificate = await _unitOfWork.CertificateRepository.GetByIdAsync(certificateId);
+        var certificate = await _unitOfWork.CertificateRepository.FirstOrDefaultAsync(x => x.Id == input.Id);
 
         if (certificate == null)
         {
@@ -374,27 +377,49 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         certificate.Status = (byte)CertificateStatus.Banned;
         certificate.IsBanned = true;
         certificate.ModifiedDate = DateTime.UtcNow;
-
+        certificate.Note = input.Note;
+        _unitOfWork.CertificateRepository.UpdateAsync(certificate);
         return await _unitOfWork.CommitAsync() > 0;
     }
 
-    public async Task<bool> BanMultipleCertificates(List<Guid> certificateIds)
+    public async Task<bool> BanMultipleCertificates(List<CertificateUploadDto> inputs)
     {
-        var certificates = await _unitOfWork.CertificateRepository.FindBy(x => certificateIds.Contains(x.Id)).ToListAsync();
+        var ids = inputs.Select(x => x.Id).ToList();
+        var certificates = await _unitOfWork.CertificateRepository
+            .FindBy(x => ids.Contains(x.Id))
+            .ToListAsync();
 
-        if (certificates == null)
+        if (certificates == null || certificates.Count == 0)
         {
             throw new AppException("Certificate not found");
         }
 
         foreach (var certificate in certificates)
         {
-            certificate.Status = (byte)CertificateStatus.Banned;
-            certificate.IsBanned = true;
-            certificate.ModifiedDate = DateTime.UtcNow;
+            var input = inputs.FirstOrDefault(x => x.Id == certificate.Id);
+
+            if (input != null)
+            {
+                certificate.Status = (byte)CertificateStatus.Banned;
+                certificate.IsBanned = true;
+                certificate.ModifiedDate = DateTime.UtcNow;
+                certificate.Note = input.Note;
+            }
         }
 
+        _unitOfWork.CertificateRepository.UpdateRangeAsync(certificates);
         return await _unitOfWork.CommitAsync() > 0;
+    }
+
+    public async Task<bool> CheckCertificateLegal(string indentifyNumber)
+    {
+        var certificate = await _unitOfWork.CertificateRepository.FirstOrDefaultAsync(x => x.ReceiverIdentityNumber == indentifyNumber);
+        if(certificate != null)
+        {
+            return !certificate.IsBanned; 
+        }
+
+        return true; 
     }
 
     public async Task<Guid> Create(Guid issuerId, CertificateCreationDto certificate)
@@ -414,19 +439,22 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                 else
                 {
                     var lstSignerAddress = certificate.SignerAddress.Split(',');
-                    if (_userRepos.Any(x => !lstSignerAddress.Any(y => y.Equals(x.ReceiveAddress))))
+                    if (!lstSignerAddress.Any(signerAddress => _userRepos.Any(user => user.ReceiveAddress == signerAddress)))
                     {
                         throw new AppException("The designated signer is not found.");
                     }
                     else
                     {
-                        var lstUser = _userRepos.Where(x => lstSignerAddress.Any(y => y.Equals(x.ReceiveAddress))).ToList();
+                        var lstUser = _userRepos
+                          .Where(x => lstSignerAddress.Contains(x.ReceiveAddress) || lstSignerAddress.Contains(x.StakeId))
+                          .ToList();
+
                         foreach (var signer in lstUser)
                         {
                             lstSignerState.Add(new CertificateMulSignDto
                             {
                                 IsSigned = false,
-                                IssuerAddress = signer.StakeId,
+                                IssuerAddress = signer.ReceiveAddress,
                                 IssuerName = signer.Name,
                                 SignedDate = null, 
                             });
@@ -447,23 +475,33 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
             var issuer = await _unitOfWork.UserRepository.GetUserById(issuerId);
 
             var attachmentJson = "";
-            if (!string.IsNullOrEmpty(certificate.Attachment))
+            if (!string.IsNullOrEmpty(certificate.Attachment) && !string.IsNullOrEmpty(certificate.AttachmentName))
             {
-                var attachmentIpfsLink = await _pinataService.Upload(certificate.Attachment);
-                if (!string.IsNullOrEmpty(attachmentIpfsLink))
+                var filePath = UploadFileToTempFolder(certificate.Attachment, certificate.AttachmentName);
+                if(string.IsNullOrEmpty(filePath))
                 {
-                    throw new Exception($"File with path {certificate.Attachment} is not exist!");
+                    Console.WriteLine("Can't save file to temp folder"); 
+                    throw new AppException("Save file error!"); 
+                }
+                var attachmentIpfsLink = await _pinataService.Upload(filePath);
+                if (string.IsNullOrEmpty(attachmentIpfsLink))
+                {
+                    throw new AppException("Save file error!");
                 }
 
-                var attachmentHash = await HashFile(certificate.Attachment, attachmentIpfsLink);
+                var attachmentHash = await HashFile(filePath, attachmentIpfsLink);
                 attachmentJson = JsonSerializer.Serialize(new
                 {
+                    ipfsName = certificate.AttachmentName,
                     ipfsLink = attachmentIpfsLink,
                     hash = attachmentHash,
                 }, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 });
+
+                // delete file path after upload successfully
+                File.Delete(filePath);
             }
 
             var newCertificate = new Certificate
@@ -473,7 +511,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                 IssuerId = issuerId,
                 ReceiverId = receiver.Id,
                 IssuerName = issuer.Name, 
-                ReceiverName = receiver.Name, 
+                ReceiverName = certificate.ReceiverName ?? receiver.Name, 
                 Name = certificate.CertificateName,
                 IpfsLink = await _pinataService.Upload(imagePath),
                 ImageLink = await _cloudinaryService.Upload(imagePath),
@@ -500,8 +538,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
-            throw;
+            throw new AppException(e.Message);
         }
     }
 
@@ -557,26 +594,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
 
                 var receiver = await _unitOfWork.UserRepository.GetUserByStakeId(cert.StakeId);
                 var issuer = await _unitOfWork.UserRepository.GetUserById(issuerId);
-
-                var attachmentJson = ""; 
-                if(!string.IsNullOrEmpty(cert.Attachment))
-                {
-                    var attachmentIpfsLink = await _pinataService.Upload(cert.Attachment); 
-                    if(string.IsNullOrEmpty(attachmentIpfsLink))
-                    {
-                        throw new Exception($"File with path {cert.Attachment} is not exist!"); 
-                    }
-
-                    var attachmentHash = await HashFile(cert.Attachment, attachmentIpfsLink);
-                    attachmentJson = JsonSerializer.Serialize(new
-                    {
-                        ipfsLink = attachmentIpfsLink, 
-                        hash = attachmentHash, 
-                    }, new JsonSerializerOptions
-                    {
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                    });
-                }
+              
 
                 var newCertificate = new Certificate
                 {
@@ -585,11 +603,11 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                     IssuerId = issuerId,
                     ReceiverId = receiver.Id,
                     IssuerName = issuer.Name,
-                    ReceiverName = receiver.Name,
+                    ReceiverName = cert.ReceiverName ?? receiver.Name,
                     Name = cert.CertificateName,
                     IpfsLink = await _pinataService.Upload(imagePath),
                     ImageLink = await _cloudinaryService.Upload(imagePath),
-                    AttachmentJson = attachmentJson, 
+                    AttachmentJson = "", 
                     Status = (byte)CertificateStatus.Draft,
                     ReceiverAddressWallet = cert.AddressWallet,
                     ReceiverIdentityNumber = cert.IdentityNumber,
@@ -616,8 +634,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
-            throw;
+            throw new Exception(e.Message);
         }
     }
 
@@ -659,7 +676,6 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                 SigningType = worksheet.Cells[row, 10].Text == "Multiple Sign"
                     ? SigningType.MultipleSigning : SigningType.SingleSigning,
                 SignerAddress = worksheet.Cells[row, 11].Text,
-                Attachment = worksheet.Cells[row, 12].Text, 
             };
 
             certificateList.Add(certificate);
@@ -713,8 +729,44 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         }
         catch(Exception e)
         {
-            Console.WriteLine(e.Message);
+            throw new Exception(e.Message);
         }
+    }
+
+    public async Task<bool> UploadAttachment(CertificateUploadDto cert)
+    {
+        var certificate = await _unitOfWork.CertificateRepository.FirstOrDefaultAsync(x => x.Id == cert.Id) ?? throw new AppException("Certificate is not exist or deleted");
+
+        if (!string.IsNullOrEmpty(cert.Attachment) && !string.IsNullOrEmpty(cert.AttachmentName))
+        {
+            var filePath = UploadFileToTempFolder(cert.Attachment, cert.AttachmentName);
+            if (string.IsNullOrEmpty(filePath))
+            {
+                throw new AppException("Save file error!");
+            }
+            var attachmentIpfsLink = await _pinataService.Upload(filePath);
+            if (string.IsNullOrEmpty(attachmentIpfsLink))
+            {
+                throw new AppException("Save file error!");
+            }
+
+            var attachmentJson = JsonSerializer.Serialize(new
+            {
+                ipfsName = cert.AttachmentName,
+                ipfsLink = attachmentIpfsLink,
+                hash = await HashFile(filePath, attachmentIpfsLink),
+            }, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+          
+            certificate.AttachmentJson = attachmentJson;
+            _unitOfWork.CertificateRepository.UpdateAsync(certificate);
+            File.Delete(filePath);
+            return await _unitOfWork.CommitAsync() > 0;
+        }
+
+        return false; 
     }
 
     private void EmptyFolder(string folderPath)
@@ -724,8 +776,25 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         var files = Directory.GetFiles(folderPath);
         foreach (var file in files)
         {
-            File.Delete(file);
+                File.Delete(file);
         }
+    }
+
+    private string UploadFileToTempFolder(string base64, string fileName)
+    {
+        if (!Directory.Exists(Constants.CertificateTemporaryFolder))
+        {
+            throw new Exception("folder path not exist!"); 
+        };
+
+        string tempPath = Path.Combine(Constants.CertificateTemporaryFolder, fileName);
+
+        byte[] imageBytes = Convert.FromBase64String(base64);
+
+        File.WriteAllBytes(tempPath, imageBytes);
+
+        return tempPath; 
+
     }
 
     private async Task<string> HashFile(string filePath, string ipfsLink)
@@ -738,7 +807,8 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         }
         catch (Exception ex)
         {
-            throw new Exception("Error reading file: " + ex.Message);
+            Console.WriteLine(ex.Message); 
+            throw new Exception("Error reading file path:" + filePath);
         }
 
         // Convert IPFS link to bytes

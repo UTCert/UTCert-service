@@ -72,6 +72,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseStaticFiles();
+
 // global cors policy
 app.UseCors(x => x
     .SetIsOriginAllowed(origin => true)

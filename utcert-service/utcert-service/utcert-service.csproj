@@ -19,4 +19,12 @@
     <ProjectReference Include="..\UTCert.Service.Helper\UTCert.Service.Helper.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="wwwroot\Certificate\CertificateForm1.png" />
+  </ItemGroup>
+
 </Project>

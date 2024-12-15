@@ -16,4 +16,5 @@ public class CertificateCreationDto
     public SigningType SigningType { get; set; }
     public string? SignerAddress { get; set; }
     public string? Attachment { get; set; }
+    public string? AttachmentName { get; set; }
 }

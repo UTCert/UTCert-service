@@ -46,4 +46,6 @@ public class Certificate
 
     public string? AttachmentJson { get; set; }
 
+    public string? Note { get; set; }
+
 }

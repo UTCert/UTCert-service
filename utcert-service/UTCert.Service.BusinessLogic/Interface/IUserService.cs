@@ -11,4 +11,5 @@ public interface IUserService
     IEnumerable<UserResponseDto> GetAll();
     Task<bool> HasAccount(string stakeId);
     Task<UserResponseDto> GetById(Guid id);
+    Task<bool> Update(Guid id, UserCrudDto input); 
 }

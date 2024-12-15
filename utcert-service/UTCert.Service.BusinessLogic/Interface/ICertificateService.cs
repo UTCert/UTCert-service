@@ -1,5 +1,6 @@
 ﻿
 using Microsoft.AspNetCore.Http;
+using System.Runtime.CompilerServices;
 using UTCert.Model.Database;
 using UTCert.Model.Shared.Enum;
 using UTCert.Model.Web.Certificate;
@@ -17,8 +18,10 @@ public interface ICertificateService
     Task<bool> SignMultipleCertificates(List<SignCertificateRequest> inputs);
     Task<bool> SendCertificate(Guid certificateId);
     Task<bool> SendMultipleCertificates(List<Guid> certificateIds);
-    Task<bool> BanCertificate(Guid certificateId);
-    Task<bool> BanMultipleCertificates(List<Guid> certificateIds);
+    Task<bool> BanCertificate(CertificateUploadDto input);
+    Task<bool> BanMultipleCertificates(List<CertificateUploadDto> inputs);
     Task<Guid> Create(Guid issuerId, CertificateCreationDto certificate);
     Task<bool> CreateFromExcel(Guid issuerId, IFormFile certificate);
+    Task<bool> CheckCertificateLegal(string identifyNumber);
+    Task<bool> UploadAttachment(CertificateUploadDto input);
 }

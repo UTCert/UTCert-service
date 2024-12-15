@@ -34,7 +34,7 @@ namespace UTCert.Service.BusinessLogic
             dto.AvatarUri = user.AvatarUri;
 
             var contactStats = await _unitOfWork.ContactRepository.GetAll()
-                .Where(x => x.IssuerId == userId)
+                .Where(x => x.IssuerId == userId || x.ReceiverId == userId)
                 .GroupBy(x => x.Status)
                 .Select(g => new { g.Key, Count = g.Count() })
                 .ToListAsync();
@@ -55,7 +55,7 @@ namespace UTCert.Service.BusinessLogic
             dto.Banned = certificateDict.GetValueOrDefault((byte)CertificateStatus.Banned, 0);
             dto.Sent = certificateDict.GetValueOrDefault((byte)CertificateStatus.Sent, 0);
             dto.Received = await _unitOfWork.CertificateRepository.GetAll()
-                .CountAsync(x => x.ReceiverId == userId && x.Status == (int)CertificateStatus.Signed);
+                .CountAsync(x => x.ReceiverId == userId && x.Status == (int)CertificateStatus.Sent);
 
             return dto;
         }

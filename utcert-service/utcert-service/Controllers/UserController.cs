@@ -17,7 +17,7 @@ public class UserController : BaseController
 {
     private readonly IUserService _userService;
     private readonly IUnitOfWork _unitOfWork;
-    
+
     public UserController(IUserService userService, IUnitOfWork unitOfWork)
     {
         _userService = userService;
@@ -31,7 +31,7 @@ public class UserController : BaseController
         var newUserId = await _userService.Register(model);
         return new ApiResponse<Guid>(newUserId);
     }
-    
+
     [AllowAnonymous]
     [HttpGet("authenticate")]
     public async Task<ApiResponse<UserResponseDto>> Authenticate(string stakeId)
@@ -65,15 +65,15 @@ public class UserController : BaseController
         var result = await _userService.RevokeToken(curToken, ipAddress());
         return new BoolApiResponse(result);
     }
-    
+
     //comment [Authorize] at class level if want to set permission admin only
-   /* [Authorize(Role.Admin)]  
-    [HttpGet]
-    public async Task<RefreshToken?> GetAll()
-    {
-        var g = new Guid("E7653248-FDFF-4939-B472-A424D4ABF74A");
-        return await _unitOfWork.RefreshTokenRepository.GetByIdAsync(g);
-    }*/
+    /* [Authorize(Role.Admin)]  
+     [HttpGet]
+     public async Task<RefreshToken?> GetAll()
+     {
+         var g = new Guid("E7653248-FDFF-4939-B472-A424D4ABF74A");
+         return await _unitOfWork.RefreshTokenRepository.GetByIdAsync(g);
+     }*/
 
     [AllowAnonymous]
     [HttpGet("has-account")]
@@ -107,6 +107,24 @@ public class UserController : BaseController
             return response;
         }
 
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ApiResponse<bool>> Update(Guid id, [FromForm] UserCrudDto input) 
+    {
+        try
+        {
+            var result = await _userService.Update(id, input);
+            return new ApiResponse<bool>() { Success = result };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = ex.Message
+            };
+        }
     }
 
     #region private Functions

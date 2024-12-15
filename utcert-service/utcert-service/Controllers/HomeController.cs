@@ -32,4 +32,16 @@ public class HomeController : BaseController
             Data = res
         };
     }
+
+
+    [HttpGet("deploy-version")]
+    [AllowAnonymous]
+    public async Task<ApiResponse<int>> DeployVersion()
+    {
+        return new ApiResponse<int>
+        {
+            Success = true,
+            Data = 1
+        };
+    }
 }
