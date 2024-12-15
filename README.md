@@ -119,4 +119,4 @@ This project is licensed under the MIT License.
 
 ---
 
-For any questions or support, please contact [utcert.contact@gmail.com](mailto:utcert.contact@gmail.com).
+For any questions or support, please contact [contact@texblabs.com](mailto:contact@texblabs.com).
