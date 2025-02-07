@@ -24,4 +24,6 @@ public interface ICertificateService
     Task<bool> CreateFromExcel(Guid issuerId, IFormFile certificate);
     Task<bool> CheckCertificateLegal(string identifyNumber);
     Task<bool> UploadAttachment(CertificateUploadDto input);
+
+    Task<bool> DeleteMultipleCertificates(List<Guid> ids); 
 }
