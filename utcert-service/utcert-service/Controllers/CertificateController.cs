@@ -245,4 +245,26 @@ public class CertificateController : BaseController
         
     }
 
+    [HttpPost("delete-multiple-cert")]
+    public async Task<ApiResponse<bool>> DeleteMultipleCertificates(List<Guid> ids)
+    {
+        try
+        {
+            var res = await _certificateService.DeleteMultipleCertificates(ids);
+            return new ApiResponse<bool>
+            {
+                Success = res,
+                Data = res,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ApiResponse<bool>
+            {
+                Success = false,
+                Message = ex.Message,
+            };
+        }
+    }
+
 }

@@ -662,6 +662,7 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
                 throw new ArgumentException($"Invalid StudyMode value '{studyModeText}' at row {row}");
             }
 
+
             var certificate = new CertificateCreationDto
             {
                 StakeId = worksheet.Cells[row, 1].Text,
@@ -829,5 +830,20 @@ public class CertificateService : EntityService<Certificate>, ICertificateServic
         }
 
         return hashHex.ToString();
+    }
+
+    public async Task<bool> DeleteMultipleCertificates(List<Guid> ids)
+    {
+        var certificates = await _unitOfWork.CertificateRepository.GetAll()
+           .Where(x => ids.Contains(x.Id))
+           .ToListAsync();
+
+        if(certificates.Count > 0)
+        {
+            _unitOfWork.CertificateRepository.DeleteRange(certificates);
+            return await _unitOfWork.CommitAsync() > 0;
+        }
+
+        return false; 
     }
 }
