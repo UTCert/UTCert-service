@@ -1,0 +1,49 @@
+﻿services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: utcert-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - utcert-network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  utcert-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: utcert-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionString=Server=sqlserver,1433;Initial Catalog=dev-utcert;User ID=sa;Password=YourStrong@Passw0rd;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=true;Connection Timeout=30;
+      - AppSettings__Secret=6abe0f04-d18c-4146-8d0a-f98a7c70da8d
+      - AppSettings__RefreshTokenTTL=2
+    ports:
+      - "5000:80"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    networks:
+      - utcert-network
+    volumes:
+      - ./utcert-service/wwwroot:/app/wwwroot
+
+volumes:
+  sqlserver_data:
+    driver: local
+
+networks:
+  utcert-network:
+    driver: bridge
